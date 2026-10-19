@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Добавление товара</title>
+</head>
+<body>
+    <h1>Добавить новый товар</h1>
+    <form action="catalog.php" method="POST">
+        <label for="prod_title">Наименование товара:</label><br>
+        <input type="text" id="prod_title" name="prod_title" maxlength="100" required><br><br>
+        
+        <label for="prod_price">Цена товара:</label><br>
+        <input type="number" id="prod_price" name="prod_price" step="0.01" min="0" required><br><br>
+        
+        <button type="submit">Добавить в каталог</button>
+    </form>
+</body>
+</html>
