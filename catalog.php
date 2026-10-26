@@ -1,119 +1,73 @@
 <?php
-// Настройки подключения к БД
-$host = 'localhost';
-$db = 'students_db';
-$user = 'root'; // 
-$pass = '';     // 
-$charset = 'utf8mb4';
+require_once 'db.php';
 
-// Устанавливаем соединение через PDO
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-];
+$message = '';
 
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (\PDOException $e) {
-    die("Ошибка подключения к БД: " . htmlspecialchars($e->getMessage()));
-}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $title = trim($_POST['prod_title'] ?? '');
+    $priceRaw = $_POST['prod_price'] ?? '';
 
-// 1. Обработка добавления товара (HTTP POST)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['prod_title'], $_POST['prod_price'])) {
-    $title = trim($_POST['prod_title']);
-    $price = trim($_POST['prod_price']);
-    
-    // Валидация
-    $errors = [];
-    if (empty($title) || mb_strlen($title) > 100) {
-        $errors[] = 'Наименование товара должно быть от 1 до 100 символов.';
-    }
-    if (!is_numeric($price) || $price < 0) {
-        $errors[] = 'Цена должна быть положительным числом.';
-    }
+    if (empty($title) || strlen($title) > 100) {
+        $message = 'Ошибка: наименование должно быть от 1 до 100 символов.';
+    } elseif (!is_numeric($priceRaw) || $priceRaw < 0) {
+        $message = 'Ошибка: цена должна быть неотрицательным числом.';
+    } else {
+        $price = (float)$priceRaw;
 
-    if (empty($errors)) {
-        $stmt = $pdo->prepare("INSERT INTO products (title, price) VALUES (:title, :price)");
+        $stmt = $pdo->prepare('INSERT INTO products (title, price) VALUES (:title, :price)');
         $stmt->execute([
             ':title' => $title,
-            ':price' => $price
+            ':price' => $price,
         ]);
-        // Редирект для предотвращения повторной отправки формы при обновлении страницы
-        header("Location: catalog.php");
+
+        header('Location: catalog.php?msg=success');
         exit;
     }
 }
 
-// 2. Обработка просмотра карточки товара (HTTP GET)
-if (isset($_GET['id'])) {
-    $id = (int)$_GET['id'];
-    $stmt = $pdo->prepare("SELECT * FROM products WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-    $product = $stmt->fetch();
-
-    if ($product) {
-        echo "<h1>" . htmlspecialchars($product['title']) . "</h1>";
-        echo "<p>Цена: " . number_format($product['price'], 2, '.', ' ') . " руб.</p>";
-        echo '<p><a href="catalog.php">Вернуться в каталог</a></p>';
-        exit;
-    } else {
-        http_response_code(404);
-        echo "<h1>Товар не найден</h1>";
-        echo '<p><a href="catalog.php">Вернуться в каталог</a></p>';
-        exit;
-    }
-}
-
-// 3. Вывод каталога товаров (по умолчанию)
-$stmt = $pdo->query("SELECT id, title, price FROM products ORDER BY id DESC");
-$products = $stmt->fetchAll();
+$products = $pdo->query('SELECT id, title, price FROM products')->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <title>Каталог товаров</title>
-    <style>
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-    </style>
 </head>
 <body>
     <h1>Каталог товаров</h1>
-    
-    <?php if (!empty($errors)): ?>
-        <div style="color: red;">
-            <ul>
-                <?php foreach ($errors as $err): ?>
-                    <li><?= htmlspecialchars($err) ?></li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
+
+    <?php if (isset($_GET['msg']) && $_GET['msg'] === 'success'): ?>
+        <p style="color: green;">Товар успешно добавлен!</p>
+    <?php endif; ?>
+    <?php if ($message): ?>
+        <p style="color: red;"><?= htmlspecialchars($message) ?></p>
     <?php endif; ?>
 
-    <a href="index.html">Добавить новый товар</a>
-    
-    <?php if (empty($products)): ?>
-        <p>Каталог пуст.</p>
+    <form method="POST" action="catalog.php">
+        <label>Наименование товара:
+            <input type="text" name="prod_title" maxlength="100" required>
+        </label><br><br>
+        <label>Цена товара:
+            <input type="number" step="0.01" name="prod_price" min="0" required>
+        </label><br><br>
+        <button type="submit">Добавить товар</button>
+    </form>
+
+    <hr>
+
+    <h2>Список товаров</h2>
+    <?php if (count($products) === 0): ?>
+        <p>Товаров пока нет.</p>
     <?php else: ?>
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Наименование</th>
-                <th>Цена</th>
-                <th>Действия</th>
-            </tr>
-            <?php foreach ($products as $item): ?>
-                <tr>
-                    <td><?= $item['id'] ?></td>
-                    <td><?= htmlspecialchars($item['title']) ?></td>
-                    <td><?= number_format($item['price'], 2, '.', ' ') ?> руб.</td>
-                    <td><a href="catalog.php?id=<?= $item['id'] ?>">Подробнее</a></td>
-                </tr>
+        <ul>
+            <?php foreach ($products as $p): ?>
+                <li>
+                    <a href="product.php?id=<?= htmlspecialchars((string)$p['id']) ?>">
+                        <?= htmlspecialchars($p['title']) ?> — <?= number_format($p['price'], 2, ',', ' ') ?> ₽
+                    </a>
+                </li>
             <?php endforeach; ?>
-        </table>
+        </ul>
     <?php endif; ?>
 </body>
 </html>
